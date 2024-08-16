@@ -1,8 +1,16 @@
 #!/usr/bin/env python
+# Based on Greg Caporaso's fastqz manifest maker script
+# Edited to handle TGen North file patterns
 
 import glob
 import os.path
 import re
+
+def check_regx_list(regx_list, input_str):
+    for regx_str in regx_list:
+        if re.search(regx_str, input_str):
+            return True
+    return False
 
 def fq_manifestor(input_dir,
                   output_fp,
@@ -10,6 +18,8 @@ def fq_manifestor(input_dir,
                   split_pattern='_',
                   f_read_pattern='_R1_',
                   r_read_pattern='_R2_',
+                  skip_amount=0, # For most Tgen files this should be changed to 1
+                  close_pattern_list=['S\d+','L\d+'],
                   filter_pattern=None,
                   verbose=True):
 
@@ -32,17 +42,24 @@ def fq_manifestor(input_dir,
         fq_filename = os.path.basename(fq_filepath)
         sid_fields = re.split(split_pattern, fq_filename)
 
+        sid = ""
+        skip_count = 0
         if len(sid_fields) == 1:
             raise ValueError('Sample ID not found in file: %s' % fq_filepath)
         else:
-            sid = sid_fields[0]
+            for sid_f in sid_fields:
+                if skip_count < skip_amount:
+                    skip_count+=1
+                    continue
+                if check_regx_list(close_pattern_list, sid_f):
+                    break
+                sid = sid + "_" + sid_f
+        sid = sid.strip("_") # Remove start/end '_'
 
         if bool(re.search(f_read_pattern, fq_filename)):
             forward = True
-            reverse = False
         elif bool(re.search(r_read_pattern, fq_filename)):
             forward = False
-            reverse = True
         else:
             raise ValueError('Forward/reverse patterns not found in file: %s' % fq_filepath)
 
@@ -77,4 +94,3 @@ def fq_manifestor(input_dir,
     with open(output_fp, 'w') as of:
         of.write('\n'.join(lines))
         of.write('\n')
-
